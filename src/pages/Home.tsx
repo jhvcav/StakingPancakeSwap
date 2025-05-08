@@ -1,15 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Wallet, LineChart, Users, Database, Settings } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useGlobalStats } from '../hooks/useContracts';
 import { PoolCard } from '../components/PoolCard';
+import { useStakingPools } from '../hooks/useStakingPools'; // Nouveau hook à créer
 
-// Exemple de données de pool (à remplacer par les vraies données)
-const pools = [
+// Données d'exemple au cas où les données réelles ne seraient pas disponibles
+const examplePools = [
   {
     id: 0,
     name: "CAKE-BNB LP",
-    apr: "120.5",
+    apr: "0",
     totalStaked: "1,234,567",
     userStaked: "100",
     pendingRewards: "25.5"
@@ -24,16 +25,34 @@ const pools = [
   }
 ];
 
-// Dans HomePage.tsx
 export function HomePage() {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const { data: globalStats, isError, error, isLoading } = useGlobalStats();
+  
+  // Récupérer les pools de staking réels
+  const { 
+    data: stakingPools, 
+    isLoading: isPoolsLoading, 
+    isError: isPoolsError 
+  } = useStakingPools(address);
+  
+  // Utiliser les données réelles quand disponibles, sinon utiliser les exemples
+  const displayPools = stakingPools?.length > 0 ? stakingPools : examplePools;
 
   console.log("Rendu de HomePage");
   console.log("globalStats:", globalStats);
   console.log("isError:", isError);
   console.log("error:", error);
   console.log("isLoading:", isLoading);
+  console.log("stakingPools:", stakingPools);
+
+  // Pour effacer le localStorage en cas de problème de chaîne
+  useEffect(() => {
+    // Décommentez cette section si vous avez des problèmes de chaîne
+    // localStorage.removeItem('wagmi.store');
+    // localStorage.removeItem('wagmi.connected');
+    // localStorage.removeItem('wagmi.injected.connected');
+  }, []);
 
   // Afficher un message plus détaillé en cas d'erreur
   if (isError) {
@@ -119,10 +138,31 @@ export function HomePage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {pools.map(pool => (
-            <PoolCard key={pool.id} {...pool} />
-          ))}
+        <div>
+          <h2 className="text-2xl font-bold mb-6">Pools de Staking Disponibles</h2>
+          {isPoolsLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-1/3 mb-4 mx-auto"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
+              </div>
+              <p className="mt-4 text-gray-500">Chargement des pools de staking...</p>
+            </div>
+          ) : isPoolsError ? (
+            <div className="text-center text-amber-600 py-4">
+              Impossible de charger les pools de staking. Affichage des données d'exemple.
+            </div>
+          ) : stakingPools?.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Aucun pool de staking n'est actuellement disponible.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {displayPools.map(pool => (
+                <PoolCard key={pool.id} {...pool} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </main>
