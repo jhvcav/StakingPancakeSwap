@@ -3,14 +3,18 @@ import { Routes, Route, Link } from 'react-router-dom';
 import { Shield } from 'lucide-react';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { AdminPage } from './pages/Admin';
-import { HomePage } from './pages/Home';
+import { TransactionsAdmin } from './pages/Transactions';
+import { PoolsAdmin } from './pages/Pools';
+import { SettingsAdmin } from './pages/Settings';
+import { HomePage } from './pages/HomePage';
+import DashboardPage from './pages/admin/dashboard';
+import { ValidationPage } from './pages/ValidationPage';
 
 function App() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   
-
   const handleConnect = async () => {
     try {
       const connector = connectors[0];
@@ -32,12 +36,13 @@ function App() {
               <h1 className="text-2xl font-bold text-gray-900">PancakeSwap Staking</h1>
               <nav className="flex space-x-4">
                 <Link to="/" className="text-gray-600 hover:text-gray-900">Accueil</Link>
-              {isConnected && (
-                <Link to="/admin" className="flex items-center space-x-1 text-purple-600 hover:text-purple-800">
-                <Shield className="h-4 w-4" />
-                <span>Admin</span>
-                </Link>
-              )}
+                <Link to="/validation" className="text-gray-600 hover:text-gray-900">Validation</Link>
+                {isConnected && (
+                  <Link to="/admin" className="flex items-center space-x-1 text-purple-600 hover:text-purple-800">
+                    <Shield className="h-4 w-4" />
+                    <span>Admin</span>
+                  </Link>
+                )}
               </nav>
             </div>
             {isConnected ? (
@@ -62,7 +67,12 @@ function App() {
       {/* Routes */}
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/validation" element={<ValidationPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/transactions" element={<TransactionsAdmin />} />
+        <Route path="/admin/pools" element={<PoolsAdmin />} />
+        <Route path="/admin/settings" element={<SettingsAdmin />} />
+        <Route path="/admin/dashboard" element={<DashboardPage />} />
       </Routes>
     </div>
   );

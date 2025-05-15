@@ -6,7 +6,9 @@ import {
   MONITORING_INTERFACE_ADDRESS,
   MONITORING_INTERFACE_ABI,
   ADMIN_DASHBOARD_ADDRESS,
-  ADMIN_DASHBOARD_ABI
+  ADMIN_DASHBOARD_ABI,
+  STAKING_PANCAKESWAP_ADDRESS,
+  STAKING_PANCAKESWAP_ABI,
 } from '../config/contracts';
 
 export function useGlobalStats() {
@@ -53,5 +55,16 @@ export function useAdminStatus(address?: string) {
     functionName: 'isAdmin',
     args: address ? [address] : undefined,
     enabled: !!address
+  });
+}
+
+// Dans votre fichier useContracts.js ou similaire
+export function usePoolStatus(poolId) {
+  return useReadContract({
+    address: STAKING_PANCAKESWAP_ADDRESS,
+    abi: STAKING_PANCAKESWAP_ABI,
+    functionName: 'getPoolInfo',
+    args: [poolId],
+    watch: true, // Surveiller les mises à jour
   });
 }
