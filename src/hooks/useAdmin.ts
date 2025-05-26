@@ -10,7 +10,7 @@ import {
   STAKING_PANCAKESWAP_ABI,
   ERC20_ABI,
   BLOCK_EXPLORER_URL
-} from '../config/contracts';
+} from '../config/contractsV2';
 
 // Compteur global de refreshPools pour éviter les boucles infinies
 let refreshPoolsCounter = 0;

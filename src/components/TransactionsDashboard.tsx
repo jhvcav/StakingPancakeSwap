@@ -15,7 +15,7 @@ import {
 } from 'chart.js';
 import { format, startOfDay, eachDayOfInterval, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { getTransactionsFromBSC } from '../services/transactionServiceBSC';
+import { getTransactions } from '../services/transactionServiceBSC';
 
 // Enregistrer les composants Chart.js
 ChartJS.register(
@@ -53,7 +53,7 @@ export function TransactionsDashboard() {
     setIsLoading(true);
     try {
       // Récupérer toutes les transactions pour la période
-      const transactions = await getTransactionsFromBSC({ limit: 1000 });
+      const transactions = await getTransactions({ limit: 1000 });
       
       // Grouper par jour
       const summariesMap = new Map<string, DailySummary>();

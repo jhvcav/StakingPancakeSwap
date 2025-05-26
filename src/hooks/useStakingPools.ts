@@ -5,7 +5,7 @@ import {
   STAKING_MANAGER_ABI,
   STAKING_PANCAKESWAP_ADDRESS,
   STAKING_PANCAKESWAP_ABI
-} from '../config/contracts';
+} from '../config/contractsV2';
 
 // Données d'exemple à utiliser en cas d'erreur
 const examplePools = [

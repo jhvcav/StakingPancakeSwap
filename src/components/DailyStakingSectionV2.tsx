@@ -301,6 +301,75 @@ export function DailyStakingSection() {
     }
   };
 
+  // Fonction pour retirer (unstake) des LP tokens
+const unstakeLP = async (poolId, amount, poolName) => {
+  if (!window.ethereum) {
+    toast.error("Portefeuille non connecté");
+    return;
+  }
+
+  setIsProcessing(true);
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    
+    // Contrat MasterChef
+    const masterChef = new ethers.Contract(
+      PANCAKE_MASTERCHEF_ADDRESS,
+      [
+        {
+          "inputs": [
+            {"internalType": "uint256", "name": "_pid", "type": "uint256"},
+            {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+          ],
+          "name": "withdraw",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ],
+      signer
+    );
+    
+    const amountWei = ethers.parseEther(amount);
+    console.log(`Unstaking ${amount} LP tokens du pool ${poolId} (${poolName})`);
+    
+    const tx = await masterChef.withdraw(poolId, amountWei);
+    console.log("Transaction envoyée:", tx.hash);
+    
+    toast.success(`Transaction envoyée! Récupération de ${amount} LP tokens en cours...`);
+    
+    const receipt = await tx.wait();
+    console.log("Transaction confirmée:", receipt);
+    
+    if (receipt.status === 1) {
+      // Enregistrer l'opération dans l'historique
+      const operation = {
+        date: new Date().toISOString(),
+        deposits: "0", // Pas de dépôt dans ce cas
+        lpTokens: amount,
+        pool: poolName,
+        poolId: poolId,
+        status: 'unstaked'
+      };
+      
+      saveHistory(operation);
+      
+      toast.success(`${amount} LP tokens retirés avec succès! Allez dans l'onglet "Retirer Liquidité" pour convertir vos LP en tokens.`);
+      
+      // Rafraîchir les positions
+      await fetchPositions();
+    } else {
+      toast.error("La transaction a échoué");
+    }
+  } catch (error) {
+    console.error("Erreur lors du unstake:", error);
+    toast.error(`Erreur: ${error.message || "Transaction échouée"}`);
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
   // Réclamer toutes les récompenses
   const harvestAll = async () => {
     setIsProcessing(true);
@@ -586,45 +655,58 @@ export function DailyStakingSection() {
       </div>
 
       {/* Positions actuelles */}
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold flex items-center">
-            <TrendingUp className="mr-2" /> Positions Actives
-          </h2>
-          <button
-            onClick={harvestAll}
-            disabled={isProcessing || parseFloat(totalRewards) === 0}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
-          >
-            Réclamer tout ({totalRewards} CAKE)
-          </button>
-        </div>
-        
-        {positions.length === 0 ? (
-          <p className="text-gray-500">Aucune position active</p>
-        ) : (
-          <div className="space-y-3">
-            {positions.map(position => (
-              <div key={position.poolId} className="bg-gray-50 rounded-lg p-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h4 className="font-medium">{position.poolName}</h4>
-                    <p className="text-sm text-gray-600">
-                      {position.amount} LP tokens stakés
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-semibold text-green-600">
-                      {position.pending} CAKE
-                    </p>
-                    <p className="text-xs text-gray-500">Récompenses</p>
-                  </div>
-                </div>
+<div className="bg-white rounded-lg shadow p-6 mb-6">
+  <div className="flex justify-between items-center mb-4">
+    <h2 className="text-lg font-semibold flex items-center">
+      <TrendingUp className="mr-2" /> Positions Actives
+    </h2>
+    <div className="flex space-x-2">
+      <button
+        onClick={harvestAll}
+        disabled={isProcessing || parseFloat(totalRewards) === 0}
+        className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+      >
+        Réclamer tout ({totalRewards} CAKE)
+      </button>
+    </div>
+  </div>
+  
+  {positions.length === 0 ? (
+    <p className="text-gray-500">Aucune position active</p>
+  ) : (
+    <div className="space-y-3">
+      {positions.map(position => (
+        <div key={position.poolId} className="bg-gray-50 rounded-lg p-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h4 className="font-medium">{position.poolName}</h4>
+              <p className="text-sm text-gray-600">
+                {position.amount} LP tokens stakés
+              </p>
+            </div>
+            <div className="flex flex-col items-end">
+              <p className="text-lg font-semibold text-green-600">
+                {position.pending} CAKE
+              </p>
+              <p className="text-xs text-gray-500">Récompenses</p>
+              
+              {/* Bouton Unstake */}
+              <div className="mt-2 flex space-x-2">
+                <button
+                  onClick={() => unstakeLP(position.poolId, position.amount, position.poolName)}
+                  disabled={isProcessing}
+                  className="text-sm bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 disabled:opacity-50"
+                >
+                  Unstake LP
+                </button>
               </div>
-            ))}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
 
       {/* Historique */}
       <div className="bg-white rounded-lg shadow p-6">

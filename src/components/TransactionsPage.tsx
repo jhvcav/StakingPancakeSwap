@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { DataGrid } from '@mui/x-data-grid';
 import { formatDistance } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { getTransactionsFromBSC, getTransactionSummaryFromBSC } from '../services/transactionServiceBSC';
+import { getTransactionSummary, getTransactions } from '../services/transactionServiceBSC';
 
 export function TransactionsPage() {
   const [transactions, setTransactions] = useState([]);
@@ -16,8 +16,8 @@ export function TransactionsPage() {
       setIsLoading(true);
       try {
         // Charger les données depuis BSCScan
-        const txData = await getTransactionsFromBSC({ limit: 100 });
-        const summaryData = await getTransactionSummaryFromBSC();
+        const txData = await getTransactions({ limit: 100 });
+        const summaryData = await getTransactionSummary();
         
         setTransactions(txData);
         setSummary(summaryData);

@@ -1,23 +1,25 @@
 // services/transactionServiceBSC.ts
 import axios from 'axios';
-import { STAKING_PANCAKESWAP_ADDRESS, PANCAKE_ROUTER_ADDRESS } from '../config/contracts';
+import { PANCAKE_V3_CONTRACTS, PANCAKE_V2_CONTRACTS } from '../config/contracts';
+
+// Utiliser les nouvelles adresses
+const STAKING_PANCAKESWAP_ADDRESS = PANCAKE_V3_CONTRACTS.MASTERCHEF_V3; // Adresse du MasterChef V3
+const PANCAKE_ROUTER_ADDRESS = PANCAKE_V3_CONTRACTS.ROUTER; // Adresse du Router V3
 
 const BSCSCAN_API_KEY = import.meta.env.VITE_BSCSCAN_API_KEY;
 const BSCSCAN_API_URL = 'https://api.bscscan.com/api';
 
-// Types de transactions avec les bonnes signatures
+// Types de transactions avec les signatures MasterChef V3
 const TRANSACTION_TYPES = {
   '0x60803461': 'contract_creation',
-  '0x7abceffd': 'addPool',
-  '0x64482f79': 'updatePool',
-  '0xe2bbb158': 'deposit',
-  '0x441a3e70': 'withdraw',
-  '0x00e2a039': 'claimReward',
-  '0x600e1b31': 'emergencyWithdraw',
+  '0xf305d719': 'deposit', // deposit(uint256 tokenId)
+  '0x00e2a039': 'withdraw', // withdraw(uint256 tokenId, address to)
+  '0xddc63262': 'harvest', // harvest(uint256 tokenId, address to)
+  '0x3e54a964': 'updateLiquidity', // updateLiquidity(uint256 tokenId)
 };
 
 // Fonction principale pour récupérer les transactions
-export async function getTransactionsFromBSC(filters = {}) {
+async function getTransactionsFromBSC(filters = {}) {
   try {
     const response = await axios.get(BSCSCAN_API_URL, {
       params: {
@@ -66,41 +68,36 @@ function formatTransaction(tx, transactionType, category) {
   const gasFeeUSD = gasFee * bnbPriceUSD;
   
   let description = `${transactionType}`;
-  let poolId = null;
+  let tokenId = null;
   let amount = '0';
-  let allocPoint = '0';
   
   // Utiliser functionName si disponible pour la description
   if (tx.functionName) {
     description = tx.functionName;
   }
   
-  // Décoder selon le type de transaction
+  // Décoder selon le type de transaction - adapté pour V3
   try {
     if (tx.input.length > 10) {
       const params = tx.input.slice(10);
       
       switch (transactionType) {
-        case 'addPool':
-          // addPool(uint256 _allocPoint, address _lpToken, bool _withUpdate)
-          allocPoint = parseInt(params.slice(0, 64), 16);
-          const lpToken = '0x' + params.slice(88, 128);
-          description = `Ajout de pool - Points: ${allocPoint}`;
-          break;
-          
-        case 'updatePool':
-          // updatePool(uint256 _pid, uint256 _allocPoint, bool _isActive, bool _withUpdate)
-          poolId = parseInt(params.slice(0, 64), 16);
-          allocPoint = parseInt(params.slice(64, 128), 16);
-          const isActive = params.slice(128, 192) === '0'.repeat(63) + '1';
-          description = `Mise à jour du pool ${poolId} - Points: ${allocPoint}, Actif: ${isActive}`;
-          break;
-          
         case 'deposit':
+          // deposit(uint256 tokenId)
+          tokenId = parseInt(params.slice(0, 64), 16);
+          description = `Stake position NFT #${tokenId}`;
+          break;
+          
         case 'withdraw':
-          poolId = parseInt(params.slice(0, 64), 16);
-          amount = (parseInt(params.slice(64, 128), 16) / 1e18).toString();
-          description = `${transactionType === 'deposit' ? 'Dépôt' : 'Retrait'} pool ${poolId} - ${amount} tokens`;
+          // withdraw(uint256 tokenId, address to)
+          tokenId = parseInt(params.slice(0, 64), 16);
+          description = `Unstake position NFT #${tokenId}`;
+          break;
+          
+        case 'harvest':
+          // harvest(uint256 tokenId, address to)
+          tokenId = parseInt(params.slice(0, 64), 16);
+          description = `Récolte des récompenses pour position #${tokenId}`;
           break;
       }
     }
@@ -114,8 +111,8 @@ function formatTransaction(tx, transactionType, category) {
     date: new Date(parseInt(tx.timeStamp) * 1000),
     fromToken: tx.from,
     fromAmount: (parseInt(tx.value) / 1e18).toString(),
-    toToken: poolId ? `POOL_${poolId}` : 'CONTRACT',
-    toAmount: amount || allocPoint,
+    toToken: tokenId ? `NFT_${tokenId}` : 'CONTRACT',
+    toAmount: amount,
     gasFee: gasFee.toFixed(6),
     gasFeeUSD: gasFeeUSD.toFixed(2),
     gasUsed: gasUsed.toString(),
@@ -132,14 +129,13 @@ function formatTransaction(tx, transactionType, category) {
       functionName: tx.functionName,
       gasPriceWei: gasPrice,
       gasFeeWei: gasFeeWei,
-      poolId: poolId,
-      allocPoint: allocPoint
+      tokenId: tokenId
     }
   };
 }
 
 // Amélioration du résumé pour inclure plus de détails sur les frais
-export async function getTransactionSummaryFromBSC() {
+async function getTransactionSummaryFromBSC() {
   try {
     const transactions = await getTransactionsFromBSC({ limit: 1000 });
     
@@ -216,10 +212,13 @@ export async function getTransactionSummaryFromBSC() {
   }
 }
 
-// Exports pour compatibilité avec l'ancien code
-export const getTransactions = getTransactionsFromBSC;
-export const getTransactionSummary = getTransactionSummaryFromBSC;
+// Exports
+export {
+  getTransactionsFromBSC as getTransactions,
+  getTransactionSummaryFromBSC as getTransactionSummary,
+};
 
+// Autres fonctions exportées
 export const getPendingTransactions = () => {
   return [];
 };

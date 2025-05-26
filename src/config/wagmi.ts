@@ -2,11 +2,15 @@ import { createConfig, http } from 'wagmi';
 import { bsc, bscTestnet } from 'wagmi/chains';
 import { injected } from 'wagmi/connectors';
 
-// Utiliser le testnet par défaut en développement
-const defaultChain = import.meta.env.PROD ? bsc : bscTestnet;
+// Détection de l'environnement plus fiable
+const isDev = import.meta.env ? 
+  (import.meta.env.DEV === true || import.meta.env.MODE === 'development') : 
+  (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production');
+
+const defaultChain = isDev ? bscTestnet : bsc;
 
 export const config = createConfig({
-  chains: [bsc, bscTestnet], // Assurez-vous d'inclure les deux chaînes ici
+  chains: [bsc, bscTestnet],
   connectors: [
     injected(),
   ],
