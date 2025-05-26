@@ -5,7 +5,7 @@ import { resolve } from 'path';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/StakingPancakeSwap/',
+  base: '/',
   
   // Configuration plus robuste pour le chargement des dépendances
   optimizeDeps: {
