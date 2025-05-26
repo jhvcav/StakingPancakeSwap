@@ -501,8 +501,8 @@ const collectFees = async (tokenId: string) => {
     const collectParams = {
       tokenId,
       recipient: userAddress,
-      amount0Max: ethers.MaxUint128, // Collecter tous les frais disponibles
-      amount1Max: ethers.MaxUint128
+      amount0Max: ethers.MaxUint256, // Collecter tous les frais disponibles
+      amount1Max: ethers.MaxUint256
     };
     
     toast.success(`Collecte des frais pour la position #${tokenId}...`);
