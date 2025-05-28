@@ -2010,7 +2010,7 @@ const getTokenPrice = async (tokenAddress: string, provider: any): Promise<numbe
     <div className="space-y-6">
       {/* Titre et contrôles */}
       <div className="flex flex-wrap justify-between items-center gap-4">
-        <h1 className="text-2xl font-bold">🎯 Gestionnaire Staking V3 - Calculs Précis</h1>
+        <h1 className="text-2xl font-bold">🎯 Gestionnaire Staking/Farming V3</h1>
         
         <div className="flex items-center space-x-3">
           <button
