@@ -9,6 +9,7 @@ import { SettingsAdmin } from './pages/Settings';
 import { HomePage } from './pages/HomePage';
 import DashboardPage from './pages/admin/dashboard';
 import { ValidationPage } from './pages/ValidationPage';
+import TransactionHistoryManager from './components/TransactionHistoryManager';
 
 function App() {
   const { address, isConnected } = useAccount();
@@ -37,6 +38,7 @@ function App() {
               <nav className="flex space-x-4">
                 <Link to="/" className="text-gray-600 hover:text-gray-900">Accueil</Link>
                 <Link to="/validation" className="text-gray-600 hover:text-gray-900">Validation</Link>
+                <Link to="/transaction-history" className="text-gray-600 hover:text-gray-900">Historique Transactions</Link>
                 {isConnected && (
                   <Link to="/admin" className="flex items-center space-x-1 text-purple-600 hover:text-purple-800">
                     <Shield className="h-4 w-4" />
@@ -73,6 +75,7 @@ function App() {
         <Route path="/admin/pools" element={<PoolsAdmin />} />
         <Route path="/admin/settings" element={<SettingsAdmin />} />
         <Route path="/admin/dashboard" element={<DashboardPage />} />
+        <Route path="/transaction-history" element={<TransactionHistoryManager />} />
       </Routes>
     </div>
   );
