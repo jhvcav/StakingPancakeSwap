@@ -2132,7 +2132,7 @@ const getTokenPrice = async (tokenAddress: string, provider: any): Promise<numbe
             <div className="text-2xl font-bold text-green-700">
               ${positionStats.totalValue}
             </div>
-            <div className="text-sm text-green-600 font-medium">Valeur Totale</div>
+            <div className="text-sm text-green-600 font-medium">Valeur Totale Investit</div>
             <div className="text-xs text-green-500 mt-1">
               {positionStats.totalPositions} positions actives
             </div>
@@ -2144,7 +2144,7 @@ const getTokenPrice = async (tokenAddress: string, provider: any): Promise<numbe
             <div className="text-2xl font-bold text-amber-700">
               {positionStats.totalRewardsCake}
             </div>
-            <div className="text-sm text-amber-600 font-medium">CAKE</div>
+            <div className="text-sm text-amber-600 font-medium">CAKE en Staking</div>
             <div className="text-xs text-amber-500 mt-1">
               {positionStats.stakedPositions} stakées
             </div>
@@ -2156,7 +2156,7 @@ const getTokenPrice = async (tokenAddress: string, provider: any): Promise<numbe
             <div className="text-2xl font-bold text-blue-700">
               ${positionStats.totalRewardsUSD}
             </div>
-            <div className="text-sm text-blue-600 font-medium">Récompenses</div>
+            <div className="text-sm text-blue-600 font-medium">Récompenses Staking</div>
             <div className="text-xs text-blue-500 mt-1">USD combiné</div>
           </div>
         </div>
@@ -2167,7 +2167,7 @@ const getTokenPrice = async (tokenAddress: string, provider: any): Promise<numbe
             <div className="text-2xl font-bold text-teal-700">
               ${positionStats.totalFeesUSD}
             </div>
-            <div className="text-sm text-teal-600 font-medium">Frais de Liquidité</div>
+            <div className="text-sm text-teal-600 font-medium">Frais de Liquidité Farming </div>
             <div className="text-xs text-teal-500 mt-1">
               Non collectés
             </div>
@@ -2179,7 +2179,7 @@ const getTokenPrice = async (tokenAddress: string, provider: any): Promise<numbe
             <div className="text-2xl font-bold text-purple-700">
               {positions.length}
             </div>
-            <div className="text-sm text-purple-600 font-medium">Total</div>
+            <div className="text-sm text-purple-600 font-medium">Position Totale</div>
             <div className="text-xs text-purple-500 mt-1">
               {positions.filter(p => p.hasLiquidity).length} avec liquidité
             </div>
