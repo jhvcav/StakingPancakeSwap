@@ -12,7 +12,7 @@ import { StakingMonitor } from './StakingMonitor';
 import { InfinityStakingManager } from './InfinityStakingManager'; // Composant V3
 import { OneClickFarming } from './OneClickFarming'; // NOUVEAU: Importez le composant One-Click Farming
 
-export function DailyStakingManager() {
+export function DailyStakingManager() {StakingMonitor
   const [activeTab, setActiveTab] = useState('oneclick'); // 'oneclick', 'staking', 'infinity', 'create', 'liquidity' ou 'monitoring'
   const [version, setVersion] = useState('v3'); // 'v2' ou 'v3'
   
