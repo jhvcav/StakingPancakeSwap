@@ -54,7 +54,7 @@ const BSCSCAN_BASE_URL = import.meta.env.VITE_BSCSCAN_BASE_URL || "https://api.b
 
 // Validation des variables d'environnement
 if (!BSCSCAN_API_KEY) {
-  console.error('❌ REACT_APP_BSCSCAN_API_KEY manquant dans les variables d\'environnement');
+  console.error('❌ VITE_APP_BSCSCAN_API_KEY manquant dans les variables d\'environnement');
 }
 
 // Adresses connues pour labellisation
@@ -72,7 +72,7 @@ export function TransactionHistoryManager() {
   useEffect(() => {
     if (!BSCSCAN_API_KEY) {
       toast.error('⚠️ Configuration manquante : Clé API BSCScan non trouvée');
-      console.error('Ajoutez REACT_APP_BSCSCAN_API_KEY dans votre fichier .env');
+      console.error('Ajoutez VITE_APP_BSCSCAN_API_KEY dans votre fichier .env');
     }
   }, []);
   // États
