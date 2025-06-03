@@ -99,8 +99,137 @@ export const MASTERCHEF_V3_ABI = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  // Récupérer les positions stakées de l'utilisateur
+  {
+    "inputs": [
+      {"internalType": "address", "name": "_user", "type": "address"}
+    ],
+    "name": "tokenIdsOf",
+    "outputs": [
+      {"internalType": "uint256[]", "name": "", "type": "uint256[]"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // Déposer (staker) une position - version sans poolId
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_tokenId", "type": "uint256"}
+    ],
+    "name": "deposit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs":[
+      {"internalType":"address","name":"owner","type":"address"},
+      {"internalType":"uint256","name":"index","type":"uint256"}],
+      "name":"tokenOfOwnerByIndex",
+      "outputs":[{"internalType":"uint256","name":"","type":"uint256"}],
+      "stateMutability":"view","type":"function"
+    },
+  // Déposer (staker) une position - version avec poolId
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_tokenId", "type": "uint256"},
+      {"internalType": "uint256", "name": "_pid", "type": "uint256"}
+    ],
+    "name": "deposit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // Retirer (unstaker) une position
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_tokenId", "type": "uint256"},
+      {"internalType": "address", "name": "_to", "type": "address"}
+    ],
+    "name": "withdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // Récolter les récompenses
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_tokenId", "type": "uint256"},
+      {"internalType": "address", "name": "_to", "type": "address"}
+    ],
+    "name": "harvest",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // FONCTION CORRECTE: Collecter les frais de trading
+  {
+    "inputs": [
+      {
+        "components": [
+          {"internalType": "uint256", "name": "tokenId", "type": "uint256"},
+          {"internalType": "address", "name": "recipient", "type": "address"},
+          {"internalType": "uint128", "name": "amount0Max", "type": "uint128"},
+          {"internalType": "uint128", "name": "amount1Max", "type": "uint128"}
+        ],
+        "internalType": "struct INonfungiblePositionManagerStruct.CollectParams",
+        "name": "params",
+        "type": "tuple"
+      },
+      {"internalType": "address", "name": "to", "type": "address"}
+    ],
+    "name": "collectTo",
+    "outputs": [
+      {"internalType": "uint256", "name": "amount0", "type": "uint256"},
+      {"internalType": "uint256", "name": "amount1", "type": "uint256"}
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // Récompenses CAKE en attente
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_tokenId", "type": "uint256"}
+    ],
+    "name": "pendingCake",
+    "outputs": [
+      {"internalType": "uint256", "name": "pending", "type": "uint256"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // Infos sur une position stakée
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "", "type": "uint256"}
+    ],
+    "name": "userPositionInfos",
+    "outputs": [
+      {"internalType": "uint128", "name": "liquidity", "type": "uint128"},
+      {"internalType": "uint128", "name": "boostLiquidity", "type": "uint128"},
+      {"internalType": "int24", "name": "tickLower", "type": "int24"},
+      {"internalType": "int24", "name": "tickUpper", "type": "int24"},
+      {"internalType": "uint256", "name": "rewardGrowthInside", "type": "uint256"},
+      {"internalType": "uint256", "name": "reward", "type": "uint256"},
+      {"internalType": "address", "name": "user", "type": "address"},
+      {"internalType": "uint256", "name": "pid", "type": "uint256"},
+      {"internalType": "uint256", "name": "boostMultiplier", "type": "uint256"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // Nombre total de pools
+  {
+    "inputs": [],
+    "name": "poolLength",
+    "outputs": [
+      {"internalType": "uint256", "name": "", "type": "uint256"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
-]
+];
 
 export const POSITION_MANAGER_ABI = [
   "function name() external view returns (string)",
@@ -221,3 +350,4 @@ export const ROUTER_ABI = [
   // Function to get pool address
   "function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address pool)"
 ];
+

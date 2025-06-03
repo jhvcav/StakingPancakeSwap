@@ -478,6 +478,7 @@ const collectFeesForStakedPosition = async (tokenId: string, provider: any) => {
 };
 
 // Fonction pour collecter les frais de liquidité
+// Version modifiée pour gérer les positions stakées dans MasterChef V3
 const collectFees = async (tokenId: string) => {
   if (!window.ethereum || !userAddress) {
     toast.error('Wallet non connecté');
@@ -485,36 +486,569 @@ const collectFees = async (tokenId: string) => {
   }
 
   setProcessingId(`fees-${tokenId}`);
+  
   try {
+    console.log(`Début de la collecte pour tokenId: ${tokenId}`);
+    
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
     
     const positionManager = new ethers.Contract(
       PANCAKE_V3_CONTRACTS.POSITION_MANAGER,
-      [
-        "function collect(tuple(uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max)) external payable returns (uint256 amount0, uint256 amount1)"
-      ],
+      POSITION_MANAGER_ABI,
       signer
     );
     
-    // Paramètres de collecte - collecter tous les frais disponibles
-    const collectParams = {
-      tokenId,
-      recipient: userAddress,
-      amount0Max: ethers.MaxUint256, // Collecter tous les frais disponibles
-      amount1Max: ethers.MaxUint256
-    };
+    const tokenIdBigInt = BigInt(tokenId);
     
-    toast.success(`Collecte des frais pour la position #${tokenId}...`);
-    const tx = await positionManager.collect(collectParams);
-    await tx.wait();
+    // Vérifier le propriétaire de la position
+    console.log("Vérification de la propriété...");
+    const owner = await positionManager.ownerOf(tokenIdBigInt);
+    console.log("Propriétaire actuel:", owner);
+    console.log("Votre adresse:", userAddress);
     
-    toast.success(`Frais collectés avec succès!`);
+    // Vérifier si la position est stakée dans MasterChef V3
+    const masterChefAddress = PANCAKE_V3_CONTRACTS.MASTERCHEF_V3; // Assurez-vous d'avoir cette adresse
+    const isStakedInMasterChef = owner.toLowerCase() === masterChefAddress?.toLowerCase();
+    
+    if (isStakedInMasterChef) {
+      console.log("Position stakée dans MasterChef V3 détectée");
+      
+      // Pour les positions stakées, on doit utiliser le MasterChef V3
+      const masterChef = new ethers.Contract(
+        PANCAKE_V3_CONTRACTS.MASTERCHEF_V3,
+        MASTERCHEF_V3_ABI,
+        signer
+      );
+      
+      // Vérifier que l'utilisateur a bien staké cette position
+      const userTokenIds = await masterChef.tokenIdsOf(userAddress);
+      const hasStakedPosition = userTokenIds.some(id => id.toString() === tokenId);
+      
+      if (!hasStakedPosition) {
+        toast.error("Cette position n'est pas stakée par votre adresse");
+        return;
+      }
+      
+      console.log("Position stakée confirmée, tentative de harvest...");
+      
+      // Pour les positions stakées, utilisez harvest au lieu de collect
+      toast.info(`Récolte des récompenses pour la position stakée #${tokenId}...`);
+      
+      const harvestTx = await masterChef.harvest(tokenIdBigInt, userAddress);
+      await harvestTx.wait();
+      
+      toast.success(`Récompenses récoltées avec succès! Hash: ${harvestTx.hash}`);
+      
+      // Note: Les frais de trading ne peuvent pas être collectés directement sur une position stakée
+      // Il faut d'abord unstake la position si vous voulez collecter les frais de trading
+      toast.info("Pour collecter les frais de trading, vous devez d'abord unstake la position");
+      
+    } else if (owner.toLowerCase() === userAddress.toLowerCase()) {
+      
+      // Position non stakée - collecte normale des frais
+      console.log("Position non stakée, collecte normale...");
+      
+      // Vérifier les frais disponibles
+      const positionInfo = await positionManager.positions(tokenIdBigInt);
+      console.log("Tokens owed 0:", positionInfo.tokensOwed0.toString());
+      console.log("Tokens owed 1:", positionInfo.tokensOwed1.toString());
+      
+      if (positionInfo.tokensOwed0 === 0n && positionInfo.tokensOwed1 === 0n) {
+        toast.error("Aucun frais à collecter pour cette position");
+        return;
+      }
+      
+      // Collecte normale
+      const maxUint128 = BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+      const collectParams = {
+        tokenId: tokenIdBigInt,
+        recipient: userAddress,
+        amount0Max: maxUint128,
+        amount1Max: maxUint128
+      };
+      
+      console.log("Estimation du gas...");
+      const gasEstimate = await positionManager.collect.estimateGas(collectParams);
+      
+      toast.info(`Collecte des frais pour la position #${tokenId}...`);
+      const tx = await positionManager.collect(collectParams, {
+        gasLimit: gasEstimate * 120n / 100n
+      });
+      
+      await tx.wait();
+      toast.success(`Frais collectés avec succès! Hash: ${tx.hash}`);
+      
+    } else {
+      
+      // La position appartient à quelqu'un d'autre
+      toast.error(`Cette position appartient à une autre adresse: ${owner}`);
+      console.log("Position appartient à:", owner);
+      return;
+      
+    }
+    
     await fetchAllUserPositions(); // Rafraîchir les positions
     
   } catch (error) {
-    console.error(`Erreur lors de la collecte des frais:`, error);
+    console.error(`Erreur lors de la collecte:`, error);
+    
+    let errorMessage = "Erreur inconnue";
+    
+    if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+      errorMessage = "Transaction annulée par l'utilisateur";
+    } else if (error.code === 'INSUFFICIENT_FUNDS' || error.code === -32000) {
+      errorMessage = "Fonds insuffisants pour payer les frais de gas";
+    } else if (error.message?.includes('execution reverted')) {
+      errorMessage = "Transaction rejetée par le contrat";
+    } else if (error.reason) {
+      errorMessage = error.reason;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    toast.error(`Erreur: ${errorMessage}`);
+  } finally {
+    setProcessingId(null);
+  }
+};
+
+// Fonction pour unstake une position du MasterChef V3
+const unstakePosition = async (tokenId: string) => {
+  if (!window.ethereum || !userAddress) {
+    toast.error('Wallet non connecté');
+    return;
+  }
+
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    
+    const masterChef = new ethers.Contract(
+      PANCAKE_V3_CONTRACTS.MASTERCHEF_V3,
+      MASTERCHEF_V3_ABI,
+      signer
+    );
+    
+    const tokenIdBigInt = BigInt(tokenId);
+    
+    toast.info(`Unstaking de la position #${tokenId}...`);
+    
+    const tx = await masterChef.withdraw(tokenIdBigInt, userAddress);
+    await tx.wait();
+    
+    toast.success(`Position unstakée avec succès! Hash: ${tx.hash}`);
+    await fetchAllUserPositions();
+    
+  } catch (error) {
+    console.error('Erreur unstake:', error);
+    toast.error(`Erreur unstake: ${error.message}`);
+  }
+};
+
+// Fonction pour collecter les frais via MasterChef V3 (sans unstake)
+const collectFeesViaMasterChef = async (tokenId: string) => {
+  if (!window.ethereum || !userAddress) {
+    toast.error('Wallet non connecté');
+    return;
+  }
+
+  setProcessingId(`fees-${tokenId}`);
+  
+  try {
+    console.log(`Collecte des frais via MasterChef V3 pour tokenId: ${tokenId}`);
+    
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    
+    // ABI étendu pour MasterChef V3 avec fonction de collecte des frais
+    const MASTERCHEF_V3_EXTENDED_ABI = [
+      ...MASTERCHEF_V3_ABI,
+      // Fonction pour collecter les frais sans unstake (si disponible)
+      {
+        "inputs": [
+          {"internalType": "uint256", "name": "_tokenId", "type": "uint256"},
+          {"internalType": "address", "name": "_to", "type": "address"},
+          {"internalType": "uint128", "name": "_amount0Max", "type": "uint128"},
+          {"internalType": "uint128", "name": "_amount1Max", "type": "uint128"}
+        ],
+        "name": "collectTo",
+        "outputs": [
+          {"internalType": "uint256", "name": "amount0", "type": "uint256"},
+          {"internalType": "uint256", "name": "amount1", "type": "uint256"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      // Alternative: fonction collect simple
+      {
+        "inputs": [
+          {"internalType": "uint256", "name": "_tokenId", "type": "uint256"}
+        ],
+        "name": "collect",
+        "outputs": [
+          {"internalType": "uint256", "name": "amount0", "type": "uint256"},
+          {"internalType": "uint256", "name": "amount1", "type": "uint256"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }
+    ];
+    
+    const masterChef = new ethers.Contract(
+      PANCAKE_V3_CONTRACTS.MASTERCHEF_V3,
+      MASTERCHEF_V3_EXTENDED_ABI,
+      signer
+    );
+    
+    const tokenIdBigInt = BigInt(tokenId);
+    
+    // Vérifier que l'utilisateur a bien staké cette position
+    const userTokenIds = await masterChef.tokenIdsOf(userAddress);
+    const hasStakedPosition = userTokenIds.some(id => id.toString() === tokenId);
+    
+    if (!hasStakedPosition) {
+      toast.error("Cette position n'est pas stakée par votre adresse");
+      return;
+    }
+    
+    console.log("Position stakée confirmée, tentative de collecte des frais...");
+    
+    // Essayer différentes méthodes selon ce qui est disponible
+    let tx;
+    
+    try {
+      // Méthode 1: collectTo avec paramètres complets
+      const maxUint128 = BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+      
+      console.log("Tentative collectTo...");
+      tx = await masterChef.collectTo(tokenIdBigInt, userAddress, maxUint128, maxUint128);
+      console.log("collectTo réussi!");
+      
+    } catch (collectToError) {
+      console.log("collectTo échoué, tentative collect simple...");
+      
+      try {
+        // Méthode 2: collect simple
+        tx = await masterChef.collect(tokenIdBigInt);
+        console.log("collect simple réussi!");
+        
+      } catch (collectError) {
+        console.error("Toutes les méthodes de collecte ont échoué");
+        throw new Error("Le MasterChef V3 ne supporte pas la collecte directe des frais");
+      }
+    }
+    
+    toast.info(`Collection des frais en cours... Hash: ${tx.hash}`);
+    
+    const receipt = await tx.wait();
+    
+    if (receipt.status === 1) {
+      toast.success(`Frais collectés avec succès! Hash: ${tx.hash}`);
+      await fetchAllUserPositions(); // Rafraîchir les positions
+    } else {
+      throw new Error("Transaction échouée");
+    }
+    
+  } catch (error) {
+    console.error(`Erreur lors de la collecte via MasterChef:`, error);
+    
+    let errorMessage = "Erreur inconnue";
+    
+    if (error.message?.includes("ne supporte pas la collecte")) {
+      errorMessage = "Le MasterChef V3 ne permet pas la collecte directe des frais. Vous devez unstake la position.";
+    } else if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+      errorMessage = "Transaction annulée par l'utilisateur";
+    } else if (error.message?.includes('execution reverted')) {
+      errorMessage = "Transaction rejetée - la fonction n'est pas disponible sur ce contrat";
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    toast.error(`Erreur: ${errorMessage}`);
+  } finally {
+    setProcessingId(null);
+  }
+};
+
+// Fonction pour unstake + collecter + restake (Option 2)
+const unstakeCollectRestake = async (tokenId: string) => {
+  if (!window.ethereum || !userAddress) {
+    toast.error('Wallet non connecté');
+    return;
+  }
+
+  setProcessingId(`fees-${tokenId}`);
+  
+  try {
+    console.log(`Unstake-Collect-Restake pour tokenId: ${tokenId}`);
+    
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    
+    const masterChef = new ethers.Contract(
+      PANCAKE_V3_CONTRACTS.MASTERCHEF_V3,
+      MASTERCHEF_V3_ABI,
+      signer
+    );
+    
+    const positionManager = new ethers.Contract(
+      PANCAKE_V3_CONTRACTS.POSITION_MANAGER,
+      POSITION_MANAGER_ABI,
+      signer
+    );
+    
+    const tokenIdBigInt = BigInt(tokenId);
+    
+    // Étape 1: Unstake
+    toast.info(`Étape 1/3: Unstaking position #${tokenId}...`);
+    const unstakeTx = await masterChef.withdraw(tokenIdBigInt, userAddress);
+    await unstakeTx.wait();
+    console.log("Unstake réussi");
+    
+    // Étape 2: Collecter les frais
+    toast.info(`Étape 2/3: Collecte des frais...`);
+    const maxUint128 = BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+    const collectParams = {
+      tokenId: tokenIdBigInt,
+      recipient: userAddress,
+      amount0Max: maxUint128,
+      amount1Max: maxUint128
+    };
+    
+    const collectTx = await positionManager.collect(collectParams);
+    await collectTx.wait();
+    console.log("Collecte réussie");
+    
+    // Étape 3: Restake
+    toast.info(`Étape 3/3: Restaking position...`);
+    
+    // D'abord approuver si nécessaire
+    const isApproved = await positionManager.isApprovedForAll(userAddress, PANCAKE_V3_CONTRACTS.MASTERCHEF_V3);
+    if (!isApproved) {
+      toast.info("Approbation nécessaire...");
+      const approveTx = await positionManager.setApprovalForAll(PANCAKE_V3_CONTRACTS.MASTERCHEF_V3, true);
+      await approveTx.wait();
+    }
+    
+    const restakeTx = await masterChef.deposit(tokenIdBigInt);
+    await restakeTx.wait();
+    console.log("Restake réussi");
+    
+    toast.success(`Processus complet terminé! Frais collectés et position restakée.`);
+    await fetchAllUserPositions();
+    
+  } catch (error) {
+    console.error(`Erreur dans le processus unstake-collect-restake:`, error);
     toast.error(`Erreur: ${error.message}`);
+  } finally {
+    setProcessingId(null);
+  }
+};
+
+// Fonction principale qui choisit la bonne méthode
+const collectFeesStakedPosition = async (tokenId: string) => {
+  // Essayer d'abord la collecte directe via MasterChef
+  try {
+    await collectFeesViaMasterChef(tokenId);
+  } catch (error) {
+    // Si ça échoue, proposer l'unstake-collect-restake
+    const userConfirm = confirm(
+      `La collecte directe a échoué. Voulez-vous unstake temporairement la position pour collecter les frais puis la restake automatiquement ?
+      
+⚠️ Note: Cela nécessitera 3 transactions et vous perdrez temporairement les récompenses CAKE pendant le processus.`
+    );
+    
+    if (userConfirm) {
+      await unstakeCollectRestake(tokenId);
+    }
+  }
+};
+
+// Fonction pour collecter les frais de farming SANS unstake - VERSION FINALE
+const collectFarmingFees = async (tokenId: string) => {
+  if (!window.ethereum || !userAddress) {
+    toast.error('Wallet non connecté');
+    return;
+  }
+
+  setProcessingId(`fees-${tokenId}`);
+  
+  try {
+    console.log(`🌾 Collecte des FRAIS DE FARMING pour tokenId: ${tokenId}`);
+    
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    
+    // Utiliser le même ABI que votre code existant qui marche
+    const masterChef = new ethers.Contract(
+      PANCAKE_V3_CONTRACTS.MASTERCHEF_V3,
+      MASTERCHEF_V3_ABI,
+      signer
+    );
+    
+    const tokenIdBigInt = BigInt(tokenId);
+    
+    // Vérifier que l'utilisateur a bien staké cette position
+    // Utiliser la même méthode que votre code existant
+    console.log("Vérification de la position stakée...");
+    
+    let hasStakedPosition = false;
+    let index = 0;
+    
+    // Parcourir les positions stakées comme dans votre code existant
+    try {
+      while (true) {
+        try {
+          const stakedTokenId = await masterChef.tokenOfOwnerByIndex(userAddress, index);
+          console.log(`Position stakée index ${index}: TokenID #${stakedTokenId.toString()}`);
+          
+          if (stakedTokenId.toString() === tokenId) {
+            hasStakedPosition = true;
+            console.log(`✅ Position #${tokenId} trouvée à l'index ${index}`);
+            break;
+          }
+          index++;
+        } catch (indexError) {
+          // Plus de positions à parcourir
+          console.log(`Fin de parcours à l'index ${index}`);
+          break;
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors du parcours des positions:", error);
+    }
+    
+    if (!hasStakedPosition) {
+      toast.error("Cette position n'est pas stakée par votre adresse");
+      return;
+    }
+    
+    console.log("✅ Position stakée confirmée");
+    
+    // Vérifier les infos de la position
+    try {
+      const positionInfo = await masterChef.userPositionInfos(tokenIdBigInt);
+      console.log("Position info:", positionInfo);
+      
+      if (positionInfo.user.toLowerCase() !== userAddress.toLowerCase()) {
+        toast.error("Vous n'êtes pas le propriétaire de cette position stakée");
+        return;
+      }
+    } catch (positionError) {
+      console.log("Impossible de vérifier userPositionInfos, continuation...");
+    }
+    
+    // Paramètres pour collecter TOUS les frais disponibles
+    const maxUint128 = BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+    
+    console.log("Préparation des paramètres de collecte...");
+    console.log("- TokenId:", tokenIdBigInt.toString());
+    console.log("- Recipient:", userAddress);
+    
+    toast.success(`🌾 Collecte des frais de farming pour la position #${tokenId}...`);
+    
+    // Essayer différentes méthodes de collecte
+    let tx;
+    
+    try {
+      // Méthode 1: collectTo (si elle existe)
+      console.log("🎯 Tentative collectTo...");
+      
+      const collectParams = {
+        tokenId: tokenIdBigInt,
+        recipient: userAddress,
+        amount0Max: maxUint128,
+        amount1Max: maxUint128
+      };
+      
+      tx = await masterChef.collectTo(collectParams, userAddress);
+      console.log("✅ collectTo réussi!");
+      
+    } catch (collectToError) {
+      console.log("❌ collectTo échoué:", collectToError.message);
+      
+      try {
+        // Méthode 2: collect simple (si elle existe)
+        console.log("🎯 Tentative collect simple...");
+        tx = await masterChef.collect(
+          tokenIdBigInt,
+          userAddress,
+          maxUint128,
+          maxUint128
+        );
+        console.log("✅ collect simple réussi!");
+        
+      } catch (collectError) {
+        console.log("❌ collect simple échoué:", collectError.message);
+        
+        // Méthode 3: Utiliser le Position Manager directement (peut échouer)
+        console.log("🎯 Tentative via Position Manager...");
+        
+        const positionManager = new ethers.Contract(
+          PANCAKE_V3_CONTRACTS.POSITION_MANAGER,
+          POSITION_MANAGER_ABI,
+          signer
+        );
+        
+        const collectParams = {
+          tokenId: tokenIdBigInt,
+          recipient: userAddress,
+          amount0Max: maxUint128,
+          amount1Max: maxUint128
+        };
+        
+        tx = await positionManager.collect(collectParams);
+        console.log("✅ Position Manager collect réussi!");
+      }
+    }
+    
+    if (!tx) {
+      throw new Error("Toutes les méthodes de collecte ont échoué");
+    }
+    
+    console.log("Transaction envoyée:", tx.hash);
+    toast.success(`Transaction envoyée: ${tx.hash}`);
+    
+    // Attendre la confirmation
+    const receipt = await tx.wait();
+    
+    if (receipt.status === 1) {
+      console.log("✅ Transaction confirmée");
+      console.log("Logs de la transaction:", receipt.logs);
+      toast.success(`🎉 Frais de farming collectés avec succès! Hash: ${tx.hash}`);
+      await fetchAllUserPositions(); // Rafraîchir les positions
+    } else {
+      throw new Error("Transaction échouée");
+    }
+    
+  } catch (error) {
+    console.error(`❌ Erreur lors de la collecte des frais de farming:`, error);
+    
+    let errorMessage = "Erreur inconnue";
+    
+    if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+      errorMessage = "Transaction annulée par l'utilisateur";
+    } else if (error.message?.includes('execution reverted')) {
+      if (error.message.includes('NotOwner')) {
+        errorMessage = "Vous n'êtes pas le propriétaire de cette position";
+      } else if (error.message.includes('function selector was not recognized')) {
+        errorMessage = "La fonction de collecte n'existe pas sur ce contrat";
+        console.log("💡 Ce MasterChef V3 ne supporte pas la collecte directe des frais. Vous devez unstake temporairement la position.");
+      } else {
+        errorMessage = `Transaction rejetée: ${error.message}`;
+      }
+    } else if (error.message?.includes('missing revert data')) {
+      errorMessage = "Erreur de contrat - vérifiez que la position est bien stakée";
+    } else if (error.message === "Toutes les méthodes de collecte ont échoué") {
+      errorMessage = "Impossible de collecter les frais - le contrat ne supporte pas cette fonction";
+      console.log("💡 Solution: unstake temporairement la position, collecter les frais, puis restake.");
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    toast.error(`❌ Erreur: ${errorMessage}`);
+    
   } finally {
     setProcessingId(null);
   }
@@ -2472,25 +3006,25 @@ const getTokenPrice = async (tokenAddress: string, provider: any): Promise<numbe
                         
                         {/* Bouton Farming */}
                         <div className="ml-3 flex-shrink-0">
-                          {parseFloat(position.totalFeesUSD || '0') > 0 ? (
-                            <button
-                              onClick={() => collectFees(position.tokenId)}
-                              disabled={processingId === `fees-${position.tokenId}`}
-                              className="text-sm bg-teal-600 text-white px-3 py-1 rounded hover:bg-teal-700 disabled:opacity-50 flex items-center"
-                            >
-                              {processingId === `fees-${position.tokenId}` ? (
-                                <Loader className="animate-spin h-3 w-3 mr-1" />
-                              ) : (
-                                <DollarSign className="h-3 w-3 mr-1" />
-                              )}
-                              Collecter
-                            </button>
-                          ) : (
-                            <div className="text-xs text-teal-400 text-center">
-                              Pas de frais<br/>à collecter
-                            </div>
-                          )}
-                        </div>
+  {parseFloat(position.totalFeesUSD || '0') > 0 ? (
+    <button
+      onClick={() => collectFarmingFees(position.tokenId)} // NOUVELLE FONCTION
+      disabled={processingId === `fees-${position.tokenId}`}
+      className="text-sm bg-teal-600 text-white px-3 py-1 rounded hover:bg-teal-700 disabled:opacity-50 flex items-center"
+    >
+      {processingId === `fees-${position.tokenId}` ? (
+        <Loader className="animate-spin h-3 w-3 mr-1" />
+      ) : (
+        <DollarSign className="h-3 w-3 mr-1" />
+      )}
+      Collecter
+    </button>
+  ) : (
+    <div className="text-xs text-teal-400 text-center">
+      Pas de frais<br/>à collecter
+    </div>
+  )}
+</div>
                       </div>
                     </div>
 
